@@ -16,8 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Thermo Med Assistant",
-  description:
-    "This is an agent that provides information to the user about the medical instruments made by Thermofisher Science",
+  description: "This is an agent that provides information to the user about the medical instruments made by Thermofisher Science",
 };
 
 export default function RootLayout({

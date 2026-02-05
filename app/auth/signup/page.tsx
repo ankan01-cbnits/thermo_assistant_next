@@ -39,11 +39,6 @@ const fields: { name: keyof z.infer<typeof formSchema>; type: string; placeholde
   { name: 'confirmPassword', type: 'password', placeholder: 'Confirm your password' },
 ];
 
-const providers = [
-  { id: 'google', label: 'Sign up with Google', icon: '/google-icon.svg' },
-  { id: 'github', label: 'Sign up with GitHub', icon: '/github-icon.svg' },
-];
-
 export default function SignUpPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);

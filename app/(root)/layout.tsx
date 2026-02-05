@@ -1,6 +1,5 @@
 "use client";
 
-import { Link } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ProfileDropdown } from "@/components/profile-dropdown";

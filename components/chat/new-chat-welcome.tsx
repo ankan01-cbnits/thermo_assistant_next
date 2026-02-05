@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { mutate } from "swr";
 import { Message } from "@/types/llm-response";
 import { ChatMessage } from "./chat-message";
+import { v4 as uuidv4 } from "uuid";
 
 const examplePrompts = [
   {
@@ -47,7 +48,7 @@ export function NewChatWelcome() {
       if (!prompt.trim() || !session?.user || isLoading) return;
 
       const userMessage: Message = {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         role: "user",
         content: prompt,
         timestamp: new Date(),
@@ -59,7 +60,7 @@ export function NewChatWelcome() {
       setIsLoading(true);
 
       // Create placeholder assistant message for streaming
-      const assistantMessageId = crypto.randomUUID();
+      const assistantMessageId = uuidv4();
       const streamingMessage: Message = {
         id: assistantMessageId,
         role: "assistant",
@@ -217,7 +218,7 @@ export function NewChatWelcome() {
       <main className="flex flex-col justify-center items-center gap-8">
         <div className="text-center space-y-4 max-w-2xl">
           <h1 className="text-3xl font-semibold tracking-tight text-primary">
-            Let&apos;s bring math to motion!
+            Ask anything about ThermoFisher Scientific
           </h1>
         </div>
 

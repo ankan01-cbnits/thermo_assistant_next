@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import { systemInstructions } from "@/lib/instruction-prompt";
 import { generateTitle, MessageType } from "@/actions/generateTitle";
+import { v4 as uuidv4 } from "uuid";
 
 const chatSchema = z.object({
   userPrompt: z.string().min(1).max(10000),
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
               `data: ${JSON.stringify({
                 type: "metadata",
                 conversationId,
-                messageId: crypto.randomUUID(),
+                messageId: uuidv4(),
               })}\n\n`,
             ),
           );

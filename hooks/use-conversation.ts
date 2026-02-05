@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useState, useCallback } from "react";
 import { Message } from "@/types/llm-response";
+import { v4 as uuidv4 } from "uuid";
 
 const fetcher = (url: string) => axios.get(url).then(res => res.data);
 
@@ -35,7 +36,7 @@ export function useConversation(conversationId: string | null) {
     if (!userPrompt.trim() || !user || !conversationId) return;
 
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       role: "user",
       content: userPrompt,
       timestamp: new Date(),
@@ -46,7 +47,7 @@ export function useConversation(conversationId: string | null) {
     setIsSendingMessage(true);
 
     // Create placeholder assistant message for streaming
-    const assistantMessageId = crypto.randomUUID();
+    const assistantMessageId = uuidv4();
     const streamingMessage: Message = {
       id: assistantMessageId,
       role: "assistant",
@@ -96,7 +97,7 @@ export function useConversation(conversationId: string | null) {
 
               if (data.type === 'content') {
                 // Update streaming message content
-                await mutateMessages(prev => 
+                await mutateMessages(prev =>
                   prev?.map(msg =>
                     msg.id === assistantMessageId
                       ? { ...msg, content: msg.content + data.content }
@@ -108,12 +109,12 @@ export function useConversation(conversationId: string | null) {
                 await mutateMessages(prev =>
                   prev?.map(msg =>
                     msg.id === assistantMessageId
-                      ? { 
-                          ...msg, 
-                          id: data.messageId,
-                          timestamp: new Date(data.timestamp),
-                          isStreaming: false 
-                        }
+                      ? {
+                        ...msg,
+                        id: data.messageId,
+                        timestamp: new Date(data.timestamp),
+                        isStreaming: false
+                      }
                       : msg
                   ) || [], false
                 );
@@ -134,13 +135,13 @@ export function useConversation(conversationId: string | null) {
 
     } catch (error: unknown) {
       console.error("Error sending message:", error);
-      
+
       if (error instanceof Error && error.message.includes("429")) {
         toast.error("Rate limit exceeded. Please try again later.");
       } else {
         toast.error("Failed to send message. Please try again.");
       }
-      
+
       // Remove both user and assistant messages on error
       await mutateMessages(prev => prev?.slice(0, -2) || [], false);
     } finally {
