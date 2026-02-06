@@ -59,7 +59,7 @@ export function useConversation(conversationId: string | null) {
     await mutateMessages(prev => [...(prev || []), streamingMessage], false);
 
     try {
-      const response = await fetch('/api/chat/stream2', {
+      const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

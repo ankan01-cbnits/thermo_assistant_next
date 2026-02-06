@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
                 },
             },
             {
-                text: `${systemInstructions}\n\n UserQuery: ${userPrompt}`,
+                text: `SystemPrompt: ${systemInstructions}\n\n UserQuery: ${userPrompt}`,
             },
         ]);
 
