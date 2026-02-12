@@ -1,26 +1,18 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ChatInput } from "@/components/chat/chat-input";
-import { toast } from "sonner";
-import { mutate } from "swr";
-import { Message } from "@/types/llm-response";
 import { ChatMessage } from "./chat-message";
-import { v4 as uuidv4 } from "uuid";
 import { SuggestionList } from "./suggestion-list";
 import { useSuggestions } from "@/hooks/use-suggestions";
+import { useConversation } from "@/hooks/use-conversation";
 import { examplePrompts } from "@/lib/constants/examplePrompts";
 import { dialogues } from "@/lib/constants/new-chat-dialogue";
 
 export function NewChatWelcome() {
-  const router = useRouter();
   const { data: session } = useSession();
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [showWelcome, setShowWelcome] = useState(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -28,133 +20,18 @@ export function NewChatWelcome() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const { suggestions, isLoading: isSuggestionsLoading } = useSuggestions(searchQuery);
 
+  const setSuggestionsEmpty = useCallback(() => setSearchQuery(""), []);
+  const { messages, isSendingMessage, handleSendMessage } = useConversation(null, setSuggestionsEmpty);
+
   const [dialogue] = useState(() => dialogues[Math.floor(Math.random() * dialogues.length)]);
 
   const handleSubmit = useCallback(
-    async (prompt: string) => {
-      if (!prompt.trim() || !session?.user || isLoading) return;
-
-      setSearchQuery("");
-      const userMessage: Message = {
-        id: uuidv4(),
-        role: "user",
-        content: prompt,
-        timestamp: new Date(),
-      };
-
-      setMessages([userMessage]);
-      setShowWelcome(false);
+    (prompt: string) => {
+      handleSendMessage(prompt);
       setInputValue("");
-      setIsLoading(true);
-
-      // Create placeholder assistant message for streaming
-      const assistantMessageId = uuidv4();
-      const streamingMessage: Message = {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-        isStreaming: true,
-      };
-
-      setMessages((prev) => [...prev, streamingMessage]);
-
-      try {
-        const response = await fetch("/api/chat/stream", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userPrompt: prompt,
-          }),
-        });
-
-        if (!response.ok) {
-          toast.error("Daily quota limit exceeded. Please try again tomorrow.");
-          router.push('/chat');
-        }
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error("No reader available");
-        }
-
-        let conversationId = "";
-        let newTitleGenerated = false;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                if (data.type === "metadata") {
-                  conversationId = data.conversationId;
-                } else if (data.type === "content") {
-                  // Update streaming message content
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? { ...msg, content: msg.content + data.content }
-                        : msg,
-                    ),
-                  );
-                } else if (data.type === "complete") {
-                  // Finalize the message and navigate
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? {
-                          ...msg,
-                          id: data.messageId,
-                          timestamp: new Date(data.timestamp),
-                          isStreaming: false,
-                        }
-                        : msg,
-                    ),
-                  );
-                  newTitleGenerated = data.newTitleGenerated;
-                } else if (data.type === "error") {
-                  throw new Error(data.error);
-                }
-              } catch (parseError) {
-                console.error("Error parsing stream data:", parseError);
-              }
-            }
-          }
-        }
-
-        // Invalidate the conversations cache to update the sidebar
-        if (newTitleGenerated) {
-          mutate("/api/conversations");
-        }
-
-        // Navigate to the conversation
-        if (conversationId) {
-          router.push(`/chat/${conversationId}`);
-        }
-      } catch (error: unknown) {
-        console.error("Error creating conversation:", error);
-
-        toast.error("Daily quota limit exceeded. Please try again tomorrow.");
-
-        setMessages([]);
-        setShowWelcome(true);
-        setInputValue(prompt);
-      } finally {
-        setIsLoading(false);
-      }
+      setSearchQuery("");
     },
-    [session?.user, router, isLoading],
+    [handleSendMessage],
   );
 
   useEffect(() => {
@@ -165,7 +42,7 @@ export function NewChatWelcome() {
 
   if (!session?.user) return null;
 
-  if (!showWelcome && messages.length > 0) {
+  if (messages.length > 0) {
     return (
       <div className="container mx-auto h-[calc(100vh-3.5rem)] w-full flex flex-col justify-between gap-1 pb-1">
         <div className="flex flex-1 flex-col rounded-md">
@@ -187,7 +64,7 @@ export function NewChatWelcome() {
                 suggestions={suggestions}
                 selectedIndex={selectedIndex}
                 onSelectedIndexChange={setSelectedIndex}
-                isLoading={isLoading}
+                isLoading={isSendingMessage}
                 placeholder="Ask questions on thermofisher scientific..."
               />
             </div>
@@ -221,7 +98,7 @@ export function NewChatWelcome() {
             selectedIndex={selectedIndex}
             onSelectedIndexChange={setSelectedIndex}
             onSubmit={handleSubmit}
-            isLoading={isLoading}
+            isLoading={isSendingMessage}
             placeholder="Describe the scientific concept you want to visualize..."
           />
         </div>
@@ -233,7 +110,7 @@ export function NewChatWelcome() {
               onSelect={(suggestion) => {
                 setInputValue(suggestion);
               }}
-              isLoading={isLoading}
+              isLoading={isSendingMessage}
               selectedIndex={selectedIndex}
               className="md:col-span-2"
             />
@@ -249,7 +126,7 @@ export function NewChatWelcome() {
                     inputRef.current?.focus();
                   }}
                   className="p-4 text-left border rounded-lg hover:bg-accent transition-colors md:h-24 h-20"
-                  disabled={isLoading}
+                  disabled={isSendingMessage}
                 >
                   <h3 className="font-semibold text-sm mb-2">{example.title}</h3>
                   <p className="text-xs text-muted-foreground line-clamp-2 overflow-hidden truncate">

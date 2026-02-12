@@ -16,7 +16,8 @@ export function useConversation(conversationId: string | null, setSuggestions?: 
   const { data: session } = useSession();
   const user = session?.user;
 
-  const { data: messages = [], mutate: mutateMessages, error } = useSWR<Message[]>(
+  // SWR is used only when we have a conversationId (existing conversation)
+  const { data: swrMessages = [], mutate: mutateMessages, error } = useSWR<Message[]>(
     user && conversationId ? `/api/chat/${conversationId}` : null,
     fetcher,
     {
@@ -30,24 +31,29 @@ export function useConversation(conversationId: string | null, setSuggestions?: 
     }
   );
 
+  // Local messages state for new conversations (no conversationId yet)
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
 
+  // Track whether we're in "new conversation" mode
+  const isNewConversation = conversationId === null;
+  const messages = isNewConversation ? localMessages : swrMessages;
+
   const handleSendMessage = useCallback(async (userPrompt: string) => {
-    if (!userPrompt.trim() || !user || !conversationId) return;
+    if (!userPrompt.trim() || !user) return;
+    // For existing conversations, conversationId is required
+    if (!isNewConversation && !conversationId) return;
 
     if (setSuggestions) {
       setSuggestions([]);
     }
+
     const userMessage: Message = {
       id: uuidv4(),
       role: "user",
       content: userPrompt,
       timestamp: new Date(),
     };
-
-    // Add user message immediately
-    await mutateMessages(prev => [...(prev || []), userMessage], false);
-    setIsSendingMessage(true);
 
     // Create placeholder assistant message for streaming
     const assistantMessageId = uuidv4();
@@ -59,7 +65,25 @@ export function useConversation(conversationId: string | null, setSuggestions?: 
       isStreaming: true,
     };
 
-    await mutateMessages(prev => [...(prev || []), streamingMessage], false);
+    if (isNewConversation) {
+      // For new conversations, use local state
+      setLocalMessages([userMessage, streamingMessage]);
+    } else {
+      // For existing conversations, use SWR mutate
+      await mutateMessages(prev => [...(prev || []), userMessage], false);
+      await mutateMessages(prev => [...(prev || []), streamingMessage], false);
+    }
+
+    setIsSendingMessage(true);
+
+    // Helper to update a specific message by ID
+    const updateMessage = (id: string, updater: (msg: Message) => Message) => {
+      if (isNewConversation) {
+        setLocalMessages(prev => prev.map(msg => msg.id === id ? updater(msg) : msg));
+      } else {
+        mutateMessages(prev => prev?.map(msg => msg.id === id ? updater(msg) : msg) || [], false);
+      }
+    };
 
     try {
       const response = await fetch('/api/chat/stream', {
@@ -69,14 +93,14 @@ export function useConversation(conversationId: string | null, setSuggestions?: 
         },
         body: JSON.stringify({
           userPrompt,
-          conversationId
+          ...(conversationId ? { conversationId } : {}),
         }),
       });
 
       if (!response.ok) {
-        // throw new Error(`HTTP error! status: ${response.status}`);
         toast.error("Daily quota limit exceeded. Please try again tomorrow.");
         router.push('/chat');
+        return;
       }
 
       const reader = response.body?.getReader();
@@ -87,6 +111,7 @@ export function useConversation(conversationId: string | null, setSuggestions?: 
       }
 
       let newTitleGenerated = false;
+      let newConversationId = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -100,29 +125,21 @@ export function useConversation(conversationId: string | null, setSuggestions?: 
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (data.type === 'content') {
-                // Update streaming message content
-                await mutateMessages(prev =>
-                  prev?.map(msg =>
-                    msg.id === assistantMessageId
-                      ? { ...msg, content: msg.content + data.content }
-                      : msg
-                  ) || [], false
-                );
+              if (data.type === 'metadata') {
+                // New conversation: capture the conversationId from the stream
+                newConversationId = data.conversationId;
+              } else if (data.type === 'content') {
+                updateMessage(assistantMessageId, msg => ({
+                  ...msg,
+                  content: msg.content + data.content,
+                }));
               } else if (data.type === 'complete') {
-                // Finalize the message
-                await mutateMessages(prev =>
-                  prev?.map(msg =>
-                    msg.id === assistantMessageId
-                      ? {
-                        ...msg,
-                        id: data.messageId,
-                        timestamp: new Date(data.timestamp),
-                        isStreaming: false
-                      }
-                      : msg
-                  ) || [], false
-                );
+                updateMessage(assistantMessageId, msg => ({
+                  ...msg,
+                  id: data.messageId,
+                  timestamp: new Date(data.timestamp),
+                  isStreaming: false,
+                }));
                 newTitleGenerated = data.newTitleGenerated;
               } else if (data.type === 'error') {
                 throw new Error(data.error);
@@ -138,21 +155,37 @@ export function useConversation(conversationId: string | null, setSuggestions?: 
         mutate("/api/conversations");
       }
 
+      // For new conversations, navigate to the created conversation
+      if (isNewConversation && newConversationId) {
+        router.push(`/chat/${newConversationId}`);
+      }
+
     } catch (error: unknown) {
       console.error("Error sending message:", error);
       toast.error("Daily quota limit exceeded. Please try again tomorrow.");
 
-      // Remove both user and assistant messages on error
-      await mutateMessages(prev => prev?.slice(0, -2) || [], false);
+      if (isNewConversation) {
+        // Reset local messages on error
+        setLocalMessages([]);
+      } else {
+        // Remove both user and assistant messages on error
+        await mutateMessages(prev => prev?.slice(0, -2) || [], false);
+      }
     } finally {
       setIsSendingMessage(false);
     }
-  }, [user, conversationId, mutateMessages, router, setSuggestions]);
+  }, [user, conversationId, isNewConversation, mutateMessages, router, setSuggestions]);
+
+  // Reset local messages (useful for NewChatWelcome to restore welcome state on error)
+  const resetMessages = useCallback(() => {
+    setLocalMessages([]);
+  }, []);
 
   return {
     messages,
-    isLoading: !messages && !error,
+    isLoading: !isNewConversation && !swrMessages && !error,
     isSendingMessage,
-    handleSendMessage
+    handleSendMessage,
+    resetMessages,
   };
 }
