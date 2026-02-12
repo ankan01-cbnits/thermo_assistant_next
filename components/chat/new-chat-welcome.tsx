@@ -11,29 +11,8 @@ import { ChatMessage } from "./chat-message";
 import { v4 as uuidv4 } from "uuid";
 import { SuggestionList } from "./suggestion-list";
 import { useSuggestions } from "@/hooks/use-suggestions";
-
-const examplePrompts = [
-  {
-    title: "Advanced Genetic Testing & Sequencing Systems",
-    prompt:
-      "What genetic sequencing machines does Thermo Fisher Scientific use in medical research and diagnostics?",
-  },
-  {
-    title: "Clinical Laboratory Automation & Diagnostic Instruments",
-    prompt:
-      "List of automated lab instruments by Thermo Fisher Scientific for hospitals and clinical labs",
-  },
-  {
-    title: "Mass Spectrometry & Analytical Medical Devices",
-    prompt:
-      "How Thermo Fisher Scientific mass spectrometers are used in medical testing and disease detection",
-  },
-  {
-    title: "Biopharma Manufacturing & Cell Therapy Technologies",
-    prompt:
-      "Thermo Fisher Scientific equipment for vaccine production and cell therapy manufacturing",
-  },
-];
+import { examplePrompts } from "@/lib/constants/examplePrompts";
+import { dialogues } from "@/lib/constants/new-chat-dialogue";
 
 export function NewChatWelcome() {
   const router = useRouter();
@@ -48,6 +27,8 @@ export function NewChatWelcome() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const { suggestions, isLoading: isSuggestionsLoading } = useSuggestions(searchQuery);
+
+  const [dialogue] = useState(() => dialogues[Math.floor(Math.random() * dialogues.length)]);
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
@@ -223,10 +204,10 @@ export function NewChatWelcome() {
     <div className="container mx-auto py-3 h-[calc(100vh-3.5rem)] w-full flex flex-col lg:justify-center justify-between items-center gap-8">
       <div className="h-0 w-full lg:hidden" />
 
-      <main className="flex flex-col justify-center items-center gap-8 w-full">
+      <main className="flex flex-col justify-center items-center gap-8 w-full h-full">
         <div className="text-center space-y-4 max-w-2xl">
           <h1 className="text-3xl font-semibold tracking-tight text-primary">
-            Ask anything about ThermoFisher Scientific
+            {dialogue}
           </h1>
         </div>
 
@@ -257,22 +238,25 @@ export function NewChatWelcome() {
               className="md:col-span-2"
             />
           ) : (
-            examplePrompts.map((example, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  setInputValue(example.prompt);
-                  inputRef.current?.focus();
-                }}
-                className="p-4 text-left border rounded-lg hover:bg-accent transition-colors"
-                disabled={isLoading}
-              >
-                <h3 className="font-semibold text-sm mb-2">{example.title}</h3>
-                <p className="text-xs text-muted-foreground line-clamp-2 overflow-hidden">
-                  {example.prompt}
-                </p>
-              </button>
-            ))
+            [...examplePrompts]
+              .sort(() => 0.5 - Math.random())
+              .slice(0, 2)
+              .map((example, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setInputValue(example.prompt);
+                    inputRef.current?.focus();
+                  }}
+                  className="p-4 text-left border rounded-lg hover:bg-accent transition-colors md:h-24 h-20"
+                  disabled={isLoading}
+                >
+                  <h3 className="font-semibold text-sm mb-2">{example.title}</h3>
+                  <p className="text-xs text-muted-foreground line-clamp-2 overflow-hidden truncate">
+                    {example.prompt}
+                  </p>
+                </button>
+              ))
           )}
         </div>
       </main>

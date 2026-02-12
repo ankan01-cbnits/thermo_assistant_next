@@ -27,13 +27,13 @@ export async function suggestQuestions(
   //   result.matches?.map(match => (match.metadata as QuestionMetadata).text) ?? []
   // );
 
-  const formatted = result.matches?.map((match) => ({
-  id: match.id,
-  score: match.score,
-  text: match.metadata?.text,
-  source: match.metadata?.source,
-  type: match.metadata?.type,
-  }));
+  // const formatted = result.matches?.map((match) => ({
+  // id: match.id,
+  // score: match.score,
+  // text: match.metadata?.text,
+  // source: match.metadata?.source,
+  // type: match.metadata?.type,
+  // }));
 
   // console.log(formatted)
 
